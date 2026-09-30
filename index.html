@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專業期權策略組合計算器 (US$)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center md:text-left space-y-2">
+            <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                美股期權策略分析器 (US$)
+            </h1>
+            <p class="text-slate-400">支援單一部位 (SP, LC, LP) 與多腳位組合 (LC+SC, LP+SP) 計算 (1 張合約 = 100 股)</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Input Panel -->
+            <div class="lg:col-span-5 space-y-4">
+                
+                <div class="glass-panel rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-lg font-semibold text-white mb-3">快速策略範本</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="loadPreset('SP')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors border border-slate-600 hover:border-blue-400">單一 SP</button>
+                        <button onclick="loadPreset('LC')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors border border-slate-600 hover:border-blue-400">單一 LC</button>
+                        <button onclick="loadPreset('LP')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors border border-slate-600 hover:border-blue-400">單一 LP</button>
+                        <button onclick="loadPreset('LCSC')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors border border-slate-600 hover:border-blue-400">多頭價差 (LC+SC)</button>
+                        <button onclick="loadPreset('LPSP')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors border border-slate-600 hover:border-blue-400">多頭賣權價差 (LP+SP)</button>
+                        <button onclick="legs=[]; renderLegs(); calculate();" class="px-3 py-1.5 bg-rose-900/50 hover:bg-rose-800/50 text-rose-300 rounded-lg text-sm transition-colors border border-rose-800 ml-auto">清空全部</button>
+                    </div>
+                </div>
+
+                <!-- Global Settings -->
+                <div class="glass-panel rounded-2xl p-4 shadow-xl border border-slate-700/50">
+                    <h2 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        全域參數設定 (影響年化與匯率)
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">距離到期天數 (DTE)</label>
+                            <input type="number" id="input-dte" value="30" min="1" oninput="calculate()" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">USD/HKD 匯率</label>
+                            <input type="number" id="input-rate" value="7.8" step="0.01" min="0" oninput="calculate()" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-white">策略部位 (Legs)</h2>
+                        <button onclick="addLeg()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/30 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            新增部位
+                        </button>
+                    </div>
+                    
+                    <div id="legs-container" class="space-y-3">
+                        <!-- 部位列表將由 JS 動態生成 -->
+                    </div>
+                </div>
+                
+                <div class="glass-panel rounded-2xl p-6 shadow-xl text-sm text-slate-300">
+                    <h3 class="font-semibold text-white mb-2">💡 操作提示與認知：</h3>
+                    <ul class="list-disc list-inside space-y-2 text-slate-400">
+                        <li><strong>SP 名義價值 (Notional Value)</strong>：行權價 × 100。這是您承諾接貨必須準備的購買力底線。</li>
+                        <li><strong>垂直價差 (如 LC+SC)</strong>：藉由雙向持倉，您的最大損失被鎖定，沒有無限追繳的風險，但收益也會封頂。</li>
+                        <li><strong>隱含波動率 (IV) 影響</strong>：本圖表顯示「到期時固定損益」。若打算提前平倉，IV <strong>下降</strong>對賣方有利 (權利金縮水)；IV <strong>上升</strong>對買方有利。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="lg:col-span-7 space-y-4">
+                
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div class="glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-blue-500">
+                        <div class="text-xs text-slate-400 mb-1">期初淨權利金</div>
+                        <div id="res-premium" class="text-xl font-bold text-white">US$0.00</div>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-emerald-500">
+                        <div class="text-xs text-slate-400 mb-1">最大獲利</div>
+                        <div id="res-max-profit" class="text-xl font-bold text-emerald-400">US$0.00</div>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-rose-500">
+                        <div class="text-xs text-slate-400 mb-1">最大虧損</div>
+                        <div id="res-max-loss" class="text-xl font-bold text-rose-400">US$0.00</div>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-purple-500 md:col-span-2">
+                        <div class="text-xs text-slate-400 mb-1">SP 接貨所需現金 (Notional Value)</div>
+                        <div class="flex items-baseline gap-3">
+                            <div id="res-sp-req" class="text-xl font-bold text-purple-400">US$0.00</div>
+                            <div id="res-sp-req-hkd" class="text-sm font-medium text-slate-400 bg-slate-800 px-2 py-0.5 rounded">HK$0.00</div>
+                        </div>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-amber-500">
+                        <div class="text-xs text-slate-400 mb-1">SP 年化收益率 (RoR)</div>
+                        <div id="res-sp-ror" class="text-xl font-bold text-amber-400">0.00%</div>
+                    </div>
+                </div>
+
+                <!-- Warning Banner for Naked Call -->
+                <div id="warning-banner" class="hidden glass-panel rounded-2xl p-4 shadow-xl border-l-4 border-rose-600 bg-rose-900/20">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-rose-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <div class="text-sm text-rose-200">
+                            <strong class="text-rose-400 font-bold block mb-1">高風險陷阱：偵測到「裸賣買權 (Naked Short Call)」</strong>
+                            您的策略組合在上行方向存在<strong class="text-white">無限大的虧損風險</strong>。當標的股價暴漲時，最大虧損無底線，實際操作中極易觸發券商的嚴格 Margin Call。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Breakeven Points -->
+                <div class="glass-panel rounded-2xl p-4 shadow-xl flex items-center justify-between">
+                    <div class="text-sm text-slate-400">損益兩平點 (Breakeven Points)</div>
+                    <div id="res-breakeven" class="text-lg font-semibold text-white">-</div>
+                </div>
+
+                <!-- Chart Container -->
+                <div class="glass-panel rounded-2xl p-6 shadow-xl w-full h-[450px] flex flex-col items-center justify-center relative">
+                    <canvas id="payoffChart"></canvas>
+                    <div id="empty-state" class="absolute inset-0 flex items-center justify-center text-slate-500 font-medium bg-slate-900/80 rounded-2xl z-10 backdrop-blur-sm">
+                        請在左側新增部位或選擇範本以檢視損益圖表
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始狀態
+        let legs = [];
+        let chartInstance = null;
+
+        // 生成唯一 ID
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        // 載入預設策略範本
+        function loadPreset(type) {
+            legs = []; // 清空現有
+            if (type === 'SP') {
+                legs.push({ id: generateId(), action: 'sell', type: 'put', strike: 150, premium: 3.5, qty: 1 });
+            } else if (type === 'LC') {
+                legs.push({ id: generateId(), action: 'buy', type: 'call', strike: 160, premium: 5.0, qty: 1 });
+            } else if (type === 'LP') {
+                legs.push({ id: generateId(), action: 'buy', type: 'put', strike: 140, premium: 4.0, qty: 1 });
+            } else if (type === 'LCSC') {
+                // Bull Call Spread (買低SC, 賣高SC)
+                legs.push({ id: generateId(), action: 'buy', type: 'call', strike: 150, premium: 8.0, qty: 1 });
+                legs.push({ id: generateId(), action: 'sell', type: 'call', strike: 160, premium: 3.0, qty: 1 });
+            } else if (type === 'LPSP') {
+                // Bull Put Spread (買低LP, 賣高SP)
+                legs.push({ id: generateId(), action: 'buy', type: 'put', strike: 140, premium: 2.0, qty: 1 });
+                legs.push({ id: generateId(), action: 'sell', type: 'put', strike: 150, premium: 5.5, qty: 1 });
+            }
+            renderLegs();
+            calculate();
+        }
+
+        function renderLegs() {
+            const container = document.getElementById('legs-container');
+            container.innerHTML = '';
+
+            if(legs.length === 0) {
+                container.innerHTML = `<div class="text-center p-4 text-slate-500 text-sm">目前無任何部位，請點擊上方範本或新增按鈕</div>`;
+                return;
+            }
+
+            legs.forEach((leg, index) => {
+                const row = document.createElement('div');
+                // 買入用藍色系，賣出用紅色系
+                row.className = `p-4 rounded-xl border ${leg.action === 'buy' ? 'border-blue-500/30 bg-blue-900/10' : 'border-rose-500/30 bg-rose-900/10'} relative group transition-all`;
+                
+                row.innerHTML = `
+                    <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="removeLeg('${leg.id}')" class="text-slate-400 hover:text-rose-500 p-1" title="刪除此部位">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-1">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">買/賣 (Action)</label>
+                            <select onchange="updateLeg('${leg.id}', 'action', this.value)" class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500">
+                                <option value="buy" ${leg.action === 'buy' ? 'selected' : ''}>買入 (Long)</option>
+                                <option value="sell" ${leg.action === 'sell' ? 'selected' : ''}>賣出 (Short)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">類型 (Type)</label>
+                            <select onchange="updateLeg('${leg.id}', 'type', this.value)" class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500">
+                                <option value="call" ${leg.type === 'call' ? 'selected' : ''}>買權 (Call)</option>
+                                <option value="put" ${leg.type === 'put' ? 'selected' : ''}>賣權 (Put)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">履約價 (Strike)</label>
+                            <input type="number" min="0" step="1" value="${leg.strike}" oninput="updateLeg('${leg.id}', 'strike', this.value)" class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">權利金 (US$)</label>
+                            <input type="number" min="0" step="0.01" value="${leg.premium}" oninput="updateLeg('${leg.id}', 'premium', this.value)" class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div class="col-span-2 md:col-span-4 mt-2">
+                            <label class="block text-xs text-slate-400 mb-1">合約口數 (1口 = 100股)</label>
+                            <input type="number" min="1" step="1" value="${leg.qty}" oninput="updateLeg('${leg.id}', 'qty', this.value)" class="w-full md:w-1/4 bg-slate-800 border border-slate-700 rounded-lg text-sm p-2 text-white outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addLeg() {
+            // 預設新增一筆參數
+            const defaultStrike = legs.length > 0 ? legs[legs.length-1].strike : 100;
+            legs.push({
+                id: generateId(),
+                action: 'buy',
+                type: 'call',
+                strike: defaultStrike,
+                premium: 2.0,
+                qty: 1
+            });
+            renderLegs();
+            calculate();
+        }
+
+        function removeLeg(id) {
+            legs = legs.filter(l => l.id !== id);
+            renderLegs();
+            calculate();
+        }
+
+        function updateLeg(id, field, value) {
+            const leg = legs.find(l => l.id === id);
+            if(leg) {
+                if(field === 'strike' || field === 'premium' || field === 'qty') {
+                    leg[field] = parseFloat(value) || 0;
+                } else {
+                    leg[field] = value;
+                }
+                calculate();
+            }
+        }
+
+        // 計算特定股價下的組合總損益
+        function calcPnlAtPrice(price) {
+            let totalPnl = 0;
+            for (const leg of legs) {
+                const multiplier = leg.action === 'buy' ? 1 : -1;
+                let payoff = 0;
+                
+                if (leg.type === 'call') {
+                    payoff = Math.max(0, price - leg.strike);
+                } else if (leg.type === 'put') {
+                    payoff = Math.max(0, leg.strike - price);
+                }
+
+                // (到期價值 - 期初權利金) * 買賣方向 * 每張100股 * 張數
+                const legPnl = (payoff - leg.premium) * multiplier * 100 * leg.qty;
+                totalPnl += legPnl;
+            }
+            return totalPnl;
+        }
+
+        // 格式化為 USD 金額
+        function formatMoney(num) {
+            if (num === Infinity) return "+無限大";
+            if (num === -Infinity) return "-無限大";
+            const isNegative = num < 0;
+            const formatted = Math.abs(num).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            return isNegative ? `-${formatted}` : formatted;
+        }
+
+        function calculate() {
+            const emptyState = document.getElementById('empty-state');
+            const canvas = document.getElementById('payoffChart');
+
+            if (legs.length === 0) {
+                emptyState.style.display = 'flex';
+                updateSummary(0, 0, 0, 0, [], 0, 7.8);
+                if(chartInstance) chartInstance.destroy();
+                document.getElementById('warning-banner').classList.add('hidden');
+                return;
+            }
+
+            emptyState.style.display = 'none';
+
+            // 取得全域參數
+            const dte = parseFloat(document.getElementById('input-dte').value) || 30;
+            const exRate = parseFloat(document.getElementById('input-rate').value) || 7.8;
+
+            // 1. 計算期初淨權利金 & SP接貨資金
+            let netPremium = 0;
+            let spCapitalRequired = 0;
+            let spPremiumReceived = 0;
+            let minStrike = Infinity;
+            let maxStrike = -Infinity;
+
+            legs.forEach(leg => {
+                const totalLegPremium = leg.premium * 100 * leg.qty;
+                if (leg.action === 'sell') {
+                    netPremium += totalLegPremium; // 賣出收權利金
+                    if (leg.type === 'put') {
+                        // SP 接貨保證金 = 履約價 * 100 * 張數
+                        spCapitalRequired += leg.strike * 100 * leg.qty;
+                        spPremiumReceived += totalLegPremium;
+                    }
+                } else {
+                    netPremium -= totalLegPremium; // 買入付權利金
+                }
+
+                if (leg.strike < minStrike) minStrike = leg.strike;
+                if (leg.strike > maxStrike) maxStrike = leg.strike;
+            });
+
+            if(minStrike === Infinity) minStrike = 0;
+            if(maxStrike === -Infinity) maxStrike = 100;
+
+            // 2. 建立圖表價格區間
+            let chartMinPrice = Math.max(0, minStrike * 0.3);
+            let chartMaxPrice = Math.max(maxStrike * 1.7, maxStrike + 50);
+            
+            const prices = [];
+            const pnls = [];
+            
+            let currentMaxProfit = -Infinity;
+            let currentMaxLoss = Infinity;
+
+            // 迭代計算區間內損益
+            const step = (chartMaxPrice - chartMinPrice) / 100;
+            for (let p = chartMinPrice; p <= chartMaxPrice; p += step) {
+                const price = parseFloat(p.toFixed(2));
+                const pnl = calcPnlAtPrice(price);
+                prices.push(price);
+                pnls.push(pnl);
+
+                if (pnl > currentMaxProfit) currentMaxProfit = pnl;
+                if (pnl < currentMaxLoss) currentMaxLoss = pnl;
+            }
+
+            // 3. 判斷無限大獲利/虧損 (透過極遠端斜率判斷)
+            const pnlFarUp1 = calcPnlAtPrice(chartMaxPrice * 3);
+            const pnlFarUp2 = calcPnlAtPrice(chartMaxPrice * 3 + 100);
+            if (pnlFarUp2 - pnlFarUp1 > 0.1) currentMaxProfit = Infinity;
+            if (pnlFarUp2 - pnlFarUp1 < -0.1) currentMaxLoss = -Infinity;
+            
+            // 針對下行風險 (股價歸零時)
+            const pnlAtZero = calcPnlAtPrice(0);
+            if(pnlAtZero < currentMaxLoss && pnlAtZero > -Infinity) {
+                currentMaxLoss = pnlAtZero;
+            }
+
+            // 顯示/隱藏無限風險警告 (Naked Call 導致的上行無限風險陷阱)
+            const warningBanner = document.getElementById('warning-banner');
+            if (currentMaxLoss === -Infinity) {
+                warningBanner.classList.remove('hidden');
+            } else {
+                warningBanner.classList.add('hidden');
+            }
+
+            // 計算 SP 年化收益率 (RoR)
+            let spRoR = 0;
+            if (spCapitalRequired > 0 && spPremiumReceived > 0) {
+                // 公式：(SP收取總權利金 / SP需備接貨資金) * (365 / DTE) * 100
+                spRoR = (spPremiumReceived / spCapitalRequired) * (365 / dte) * 100;
+            }
+
+            // 4. 計算損益兩平點 (Breakevens)
+            let breakevens = [];
+            for (let i = 1; i < pnls.length; i++) {
+                if ((pnls[i-1] < 0 && pnls[i] > 0) || (pnls[i-1] > 0 && pnls[i] < 0)) {
+                    // 線性插值尋找零點
+                    const p1 = prices[i-1], pnl1 = pnls[i-1];
+                    const p2 = prices[i], pnl2 = pnls[i];
+                    const exactBe = p1 - pnl1 * (p2 - p1) / (pnl2 - pnl1);
+                    if(exactBe >= 0) {
+                        breakevens.push(exactBe.toFixed(2));
+                    }
+                }
+            }
+            breakevens = [...new Set(breakevens.map(Number))].sort((a,b)=>a-b);
+
+            // 更新 UI 與 圖表
+            updateSummary(netPremium, currentMaxProfit, currentMaxLoss, spCapitalRequired, breakevens, spRoR, exRate);
+            updateChart(prices, pnls, chartMinPrice, chartMaxPrice);
+        }
+
+        function updateSummary(netPremium, maxProfit, maxLoss, spCapitalRequired, breakevens, spRoR, exRate) {
+            const elPremium = document.getElementById('res-premium');
+            elPremium.textContent = formatMoney(netPremium);
+            elPremium.className = `text-xl font-bold ${netPremium >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+            elPremium.previousElementSibling.textContent = netPremium >= 0 ? '期初淨收入 (Credit)' : '期初淨支出 (Debit)';
+
+            document.getElementById('res-max-profit').textContent = formatMoney(maxProfit);
+            document.getElementById('res-max-loss').textContent = formatMoney(maxLoss);
+            
+            // 更新 SP 資金與匯率轉換
+            document.getElementById('res-sp-req').textContent = formatMoney(spCapitalRequired);
+            const spHkd = spCapitalRequired * exRate;
+            document.getElementById('res-sp-req-hkd').textContent = `約 HK$${spHkd.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // 更新 SP 年化
+            document.getElementById('res-sp-ror').textContent = `${spRoR.toFixed(2)}%`;
+
+            const elBreakeven = document.getElementById('res-breakeven');
+            if (breakevens.length > 0) {
+                elBreakeven.textContent = breakevens.map(b => `US$${b}`).join(' , ');
+            } else {
+                elBreakeven.textContent = '無或在範圍外';
+            }
+        }
+
+        function updateChart(prices, pnls, minPrice, maxPrice) {
+            const ctx = document.getElementById('payoffChart').getContext('2d');
+            
+            // 決定點的顏色 (獲利為綠，虧損為紅)
+            const pointColors = pnls.map(p => p >= 0 ? 'rgba(52, 211, 153, 0.9)' : 'rgba(244, 63, 94, 0.9)');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: prices,
+                    datasets: [{
+                        label: '到期總損益',
+                        data: pnls,
+                        borderColor: '#60a5fa', // 藍色線條
+                        borderWidth: 2,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: 'transparent',
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        fill: false,
+                        tension: 0.05 // 讓線條稍微平滑但不失真
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#f8fafc',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                title: (items) => `到期股價: US$${items[0].label}`,
+                                label: (item) => {
+                                    const val = item.raw;
+                                    return `組合損益: ${val >= 0 ? '+' : ''}${formatMoney(val)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#334155', drawBorder: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                maxTicksLimit: 12,
+                                callback: function(value) {
+                                    return 'US$' + this.getLabelForValue(value);
+                                }
+                            },
+                            title: { display: true, text: '到期標的資產價格 (Underlying Price)', color: '#64748b' }
+                        },
+                        y: {
+                            grid: { 
+                                // 將零軸畫粗且顏色區隔
+                                color: (context) => context.tick.value === 0 ? '#cbd5e1' : '#1e293b', 
+                                lineWidth: (context) => context.tick.value === 0 ? 2 : 1 
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                callback: function(value) {
+                                    return (value > 0 ? '+' : '') + value;
+                                }
+                            },
+                            title: { display: true, text: '總損益 (US$)', color: '#64748b' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 啟動時預設載入單一 SP 範本作為展示
+        window.onload = () => loadPreset('SP');
+    </script>
+</body>
+</html>
